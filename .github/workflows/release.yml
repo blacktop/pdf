@@ -15,10 +15,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Swift 6.2.0
+      - name: Install Swift 6.1.x
         uses: swift-actions/setup-swift@v1
         with:
-          swift-version: "6.2.0"
+          swift-version: "6.1.3"
 
       - name: Show toolchain
         run: swift --version
