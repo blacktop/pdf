@@ -4,6 +4,14 @@ macOS CLI PDF reader for LLM agents. Focused on predictable, page-delimited text
 
 ## Install
 
+From [homebrew](https://brew.sh/)
+
+```bash
+brew install blacktop/tap/pdf 
+```
+
+From source
+
 ```bash
 swift build -c release
 # binary at .build/release/pdf
