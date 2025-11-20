@@ -21,9 +21,13 @@ jobs:
           swift-version: "6.2"
 
       - name: Extract version
+        shell: bash
         run: |
-          ref="${GITHUB_REF_NAME}"
-          ver="${ref#v}"
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          if [[ -z "${ver}" || "${ver}" == "${GITHUB_REF_NAME}" ]]; then
+            ver="dev-$(date -u +%Y%m%d-%H%M%S)"
+          fi
           echo "VERSION=${ver}" >> "$GITHUB_ENV"
 
       - name: Show toolchain
@@ -33,9 +37,11 @@ jobs:
         run: swift build -c release
 
       - name: Package artifact
+        shell: bash
         run: |
+          set -euo pipefail
           os="darwin"
-          arch="${RUNNER_ARCH,,}"
+          arch="${{ runner.arch }}"
           archive="pdf-${VERSION}-${os}-${arch}.tar.gz"
           mkdir -p dist
           cp .build/release/pdf dist/
