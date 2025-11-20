@@ -33,6 +33,10 @@ swift build -c release
 - `--no-defaults`      disable built‑in APFS-ish defaults
 - `--no-headers`       suppress `--- PAGE N ---` in text mode
 
+### LLM-friendly help
+
+Every subcommand accepts `--llm-help` to emit a deterministic, JSON-formatted schema of its arguments and options for tool-using agents.
+
 ## Shell completions
 
 Generate a completion script for your shell (bash, zsh, fish) and install it in your shell’s fpath/completions dir:
