@@ -26,6 +26,8 @@ swift build -c release
 
 `text`
 - `-p, --pages 1,4-6`  limit pages (1-based, ranges allowed)
+- `--format text|markdown` choose plain text or lightly structured Markdown
+- `--layout plain|smart|columns` plain = unchanged; smart = join wrapped lines/hyphens; columns = two-column aware ordering
 - `--no-headers`       suppress `--- PAGE N ---`
 - `--show-count`       print `pageCount=<n>` before content
 
@@ -36,7 +38,8 @@ swift build -c release
 - `--case-sensitive`   match with case sensitivity (default is case-insensitive)
 - `-p, --pages ...`    restrict pages
 - `--context N`        include N lines before/after each match
-- `--format text|json` machine-friendly JSON or human text (default: text)
+- `--block-context`    emit the full non-empty block (paragraph) around each match
+- `--format text|markdown|json` human text, LLM-friendly markdown, or JSON (default: text)
 - `--max-matches N`    stop after N total matches
 - `--no-defaults`      disable built‑in APFS-ish defaults
 - `--no-headers`       suppress `--- PAGE N ---` in text mode

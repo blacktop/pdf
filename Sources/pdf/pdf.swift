@@ -31,6 +31,12 @@ extension PDF {
       name: [.short, .long], help: "Pages to include (comma and ranges allowed, e.g. 1,4-6).")
     var pages: String?
 
+    @Option(name: [.long], help: "Output format: text or markdown.")
+    var format: TextFormat = .text
+
+    @Option(name: [.long], help: "Layout handling: plain or smart.")
+    var layout: LayoutMode = .plain
+
     @Flag(name: [.long], inversion: .prefixedNo, help: "Show a header before each page.")
     var headers: Bool = true
 
@@ -53,6 +59,14 @@ extension PDF {
               defaultValue: LLMHelpPrinter.defaultString(pages),
               description: "Comma/range list of pages (1-based)."),
             .init(
+              name: "format", kind: .option, required: false,
+              defaultValue: LLMHelpPrinter.defaultString(format.rawValue),
+              description: "Output formatting: text|markdown."),
+            .init(
+              name: "layout", kind: .option, required: false,
+              defaultValue: LLMHelpPrinter.defaultString(layout.rawValue),
+              description: "Layout handling: plain|smart (smart joins wrapped lines/hyphens)."),
+            .init(
               name: "headers", kind: .flag, required: false,
               defaultValue: LLMHelpPrinter.defaultString(headers),
               description: "Include page header markers (--- PAGE N ---)."),
@@ -68,16 +82,16 @@ extension PDF {
       let document = try PDFLoader.open(path: file)
       let pageNumbers = try PageSelector(rawValue: pages, pageCount: document.pageCount).pageNumbers
 
+      let formatter = PageFormatter(layout: layout, format: format)
+
       if showCount {
         print("pageCount=\(document.pageCount)")
       }
 
       for pageNumber in pageNumbers {
-        guard let page = document.page(at: pageNumber - 1), let text = page.string else { continue }
-        if headers {
-          print("--- PAGE \(pageNumber) ---")
-        }
-        print(text)
+        guard let page = document.page(at: pageNumber - 1) else { continue }
+        let body = formatter.formatPageText(page, pageNumber: pageNumber, includeHeader: headers)
+        print(body)
       }
     }
   }
@@ -116,7 +130,10 @@ extension PDF {
     @Option(name: [.long], help: "Lines of context before and after each match.")
     var context: Int = 0
 
-    @Option(name: [.long], help: "Output format: text or json.")
+    @Flag(name: [.long], help: "Emit the entire non-empty block surrounding each hit.")
+    var blockContext: Bool = false
+
+    @Option(name: [.long], help: "Output format: text, markdown, or json.")
     var format: OutputFormat = .text
 
     @Option(name: [.long], help: "Stop after emitting N matches.")
@@ -166,9 +183,13 @@ extension PDF {
               defaultValue: LLMHelpPrinter.defaultString(context),
               description: "Lines of context before/after matches."),
             .init(
+              name: "block-context", kind: .flag, required: false,
+              defaultValue: LLMHelpPrinter.defaultString(blockContext),
+              description: "Emit the full non-empty block around each match."),
+            .init(
               name: "format", kind: .option, required: false,
               defaultValue: LLMHelpPrinter.defaultString(format.rawValue),
-              description: "Output format: text or json."),
+              description: "Output format: text|markdown|json."),
             .init(
               name: "max-matches", kind: .option, required: false,
               defaultValue: LLMHelpPrinter.defaultString(maxMatches),
@@ -214,22 +235,8 @@ extension PDF {
           guard !line.isEmpty else { continue }
 
           if matcher.matches(line: line) {
-            let lowerBound = max(0, idx - context)
-            let upperBound = min(lines.count - 1, idx + context)
-            let contextBefore: [String]
-            if context > 0 && lowerBound < idx {
-              contextBefore = Array(lines[lowerBound..<idx])
-            } else {
-              contextBefore = []
-            }
-
-            let afterStart = idx + 1
-            let contextAfter: [String]
-            if context > 0 && afterStart <= upperBound {
-              contextAfter = Array(lines[afterStart...upperBound])
-            } else {
-              contextAfter = []
-            }
+            let (contextBefore, contextAfter) = ContextBuilder.bounds(
+              lines: lines, index: idx, context: context, blockContext: blockContext)
 
             let matchRecord = Match(
               page: pageNumber,
@@ -246,32 +253,42 @@ extension PDF {
                 print("--- PAGE \(pageNumber) ---")
                 printedHeader = true
               }
-              if context > 0 {
-                contextBefore.forEach { print("C: \($0)") }
-              }
+              contextBefore.forEach { print("C: \($0)") }
               print("M: \(line)")
-              if context > 0 {
-                contextAfter.forEach { print("C: \($0)") }
-              }
+              contextAfter.forEach { print("C: \($0)") }
             }
 
             if let maxMatches, emitted >= maxMatches {
-              output(matches: matches, format: format)
+              output(
+                matches: matches, format: format, context: context, headers: headers,
+                blockContext: blockContext)
               return
             }
           }
         }
       }
 
-      output(matches: matches, format: format)
+      output(
+        matches: matches, format: format, context: context, headers: headers,
+        blockContext: blockContext)
     }
 
-    private func output(matches: [Match], format: OutputFormat) {
-      guard format == .json else { return }
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-      if let data = try? encoder.encode(matches) {
-        print(String(decoding: data, as: UTF8.self))
+    private func output(
+      matches: [Match], format: OutputFormat, context: Int, headers: Bool, blockContext: Bool
+    ) {
+      switch format {
+      case .json:
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        if let data = try? encoder.encode(matches) {
+          print(String(decoding: data, as: UTF8.self))
+        }
+      case .markdown:
+        let rendered = SearchMarkdownRenderer.render(
+          matches: matches, context: context, headers: headers, blockContext: blockContext)
+        print(rendered)
+      case .text:
+        return
       }
     }
   }
@@ -410,6 +427,7 @@ struct Match: Codable {
 
 enum OutputFormat: String, CaseIterable, ExpressibleByArgument {
   case text
+  case markdown
   case json
 
   /// Per-case help surfaced in `--help` (ArgumentParser 1.6+).
@@ -417,6 +435,8 @@ enum OutputFormat: String, CaseIterable, ExpressibleByArgument {
     switch value {
     case .text:
       return "Human-readable matches with optional context."
+    case .markdown:
+      return "Structured markdown-friendly matches grouped by page."
     case .json:
       return "Machine-readable matches encoded as JSON."
     }
