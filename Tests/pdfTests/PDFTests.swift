@@ -34,6 +34,20 @@ final class PDFTests: XCTestCase {
     XCTAssertEqual(Set(terms), Set(["alpha", "beta", "gamma", "delta"]))
   }
 
+  func testSearchZeroContextDoesNotTrap() throws {
+    let pdfURL = try makeTestPDF(pages: [["keybag"]])
+
+    let search = try PDF.Search.parse([
+      pdfURL.path,
+      "--term", "keybag",
+      "--no-defaults",
+      "--format", "json",
+      "--no-headers",
+    ])
+
+    XCTAssertNoThrow(try search.run())
+  }
+
   func testPDFExtractionReadsText() throws {
     let pdfURL = try makeTestPDF(pages: [
       ["snapshot rollback", "hello world"],

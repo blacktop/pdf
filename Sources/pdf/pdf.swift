@@ -216,8 +216,20 @@ extension PDF {
           if matcher.matches(line: line) {
             let lowerBound = max(0, idx - context)
             let upperBound = min(lines.count - 1, idx + context)
-            let contextBefore = Array(lines[lowerBound..<idx])
-            let contextAfter = Array(lines[(idx + 1)...upperBound])
+            let contextBefore: [String]
+            if context > 0 && lowerBound < idx {
+              contextBefore = Array(lines[lowerBound..<idx])
+            } else {
+              contextBefore = []
+            }
+
+            let afterStart = idx + 1
+            let contextAfter: [String]
+            if context > 0 && afterStart <= upperBound {
+              contextAfter = Array(lines[afterStart...upperBound])
+            } else {
+              contextAfter = []
+            }
 
             let matchRecord = Match(
               page: pageNumber,
